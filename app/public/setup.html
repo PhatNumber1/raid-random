@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="raid-random-key" content="{{KEY}}">
+  <title>Raid Random</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/setup.css">
+</head>
+<body>
+  <!-- First run: one step at a time, with Back and Next. Later: all settings at once. -->
+  <main>
+    <header>
+      <img src="/icon.svg" alt="" width="36" height="36">
+      <h1 id="title" tabindex="-1">Raid Random</h1>
+      <span id="progress"></span>
+    </header>
+    <p class="notice" id="demo" hidden>Demo mode: all numbers are made up.</p>
+    <p class="notice bad" id="problem" role="alert" hidden></p>
+
+    <section data-step="welcome" data-title="Welcome to Raid Random" hidden>
+      <p>This wizard sets up Raid Random for you. It adds a dock to OBS with your live Twitch stats, and one button that raids a similar-sized streamer and then ends your stream.</p>
+      <p>You need OBS Studio and a Twitch account. It takes about two minutes.</p>
+      <p><strong>Please close OBS before you continue.</strong></p>
+    </section>
+
+    <section data-step="signin" data-title="Sign in with Twitch" hidden>
+      <h2 class="settings-only">Your account</h2>
+      <div id="not-configured" hidden>
+        <p>No Twitch Client ID yet. Follow <code>docs/SETUP.md</code>, then start the app again.</p>
+      </div>
+      <div id="signed-out" hidden>
+        <p id="login-error" class="bad" hidden></p>
+        <p>You approve this on Twitch's own site. This app never sees your password. It can read your viewer, follower and sub numbers, and start raids when you press the button.</p>
+        <button id="login" type="button">Sign in with Twitch</button>
+      </div>
+      <div id="pending" hidden>
+        <p>Open Twitch and check that it shows this code:</p>
+        <p class="code" id="code"></p>
+        <p><button id="activate" type="button">Open Twitch</button> <button id="cancel" type="button" class="plain">Cancel</button></p>
+        <p class="small">Twitch opens in your normal browser. This window moves on by itself once you approve.</p>
+      </div>
+      <div id="signed-in" hidden>
+        <p>Signed in as <strong id="who"></strong>. <button id="logout" type="button" class="plain">Sign out</button></p>
+      </div>
+      <div id="network" hidden>
+        <h2>The Raid Random network</h2>
+        <p class="small">Signing in adds you to the Raid Random network, so other members can raid you and you can raid them. The Raid Random website gets your channel name, when you are live, your category and a rough viewer count. When you use the raid button it also gets your exact viewer count, the channels that could be raided, and how the raid ended. Once, it checks with Twitch that it is really you, using your Twitch sign-in, which it does not keep. <strong>Signing out removes you again.</strong> Raids others sent you stay in their history for up to 90 days.</p>
+      </div>
+    </section>
+
+    <section data-step="stats" data-title="Choose your stats" hidden>
+      <h2 class="settings-only">Stats in the dock</h2>
+      <fieldset id="choices"><legend class="hide">Stats to show</legend></fieldset>
+    </section>
+
+    <section data-step="install" data-title="Install" hidden>
+      <h2 class="settings-only">Setup</h2>
+      <fieldset>
+        <legend class="hide">Setup</legend>
+        <label><input type="checkbox" id="dock" checked><span>Add the dock to OBS<small>OBS has to be closed. Your OBS settings are backed up first, and your other docks are not touched</small></span></label>
+        <label><input type="checkbox" id="autostart" checked><span>Start Raid Random with Windows<small>It runs quietly in the background so the dock always works</small></span></label>
+      </fieldset>
+      <p class="small wizard-only">Raid Random is copied to a folder of your Windows account. You can change all of this later with the gear in the dock.</p>
+    </section>
+
+    <section data-step="done" data-title="Finishing" hidden>
+      <p id="obs-text" role="status"></p>
+      <p class="small wizard-only">You can close this window. Raid Random keeps running in the background. To change something later, press the gear in the dock or open RaidRandom.exe again.</p>
+    </section>
+
+    <section id="quit-box" hidden>
+      <p><button id="again" type="button" class="plain">Run setup wizard again</button></p>
+      <button id="quit" type="button" class="plain">Quit Raid Random</button>
+      <p class="small">Only press this to stop it. Closing this window is fine: Raid Random keeps running in the background. After quitting, the dock stops working until Raid Random is started again.</p>
+    </section>
+  </main>
+
+  <footer>
+    <span id="saved" role="status"></span>
+    <button id="back" type="button" class="plain" hidden>Back</button>
+    <button id="next" type="button" disabled>Next</button>
+  </footer>
+  <script src="/setup.js"></script>
+</body>
+</html>

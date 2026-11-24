@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="raid-random-key" content="{{KEY}}">
+  <title>Raid Random</title>
+  <link rel="stylesheet" href="/dock.css">
+</head>
+<body>
+  <header>
+    <span id="status" class="status">Connecting</span>
+    <span id="demo" class="demo" hidden>Demo numbers</span>
+    <button id="gear" type="button" class="gear" title="Settings" aria-label="Settings" aria-expanded="false" aria-controls="panel">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/><circle cx="12" cy="12" r="6.6"/></svg>
+    </button>
+  </header>
+  <p id="message" role="status" hidden></p>
+  <div id="panel" hidden>
+    <fieldset id="choices"><legend>Show in the dock</legend></fieldset>
+    <p id="panel-note" class="small" role="status"></p>
+    <div class="pair">
+      <button id="more" type="button" class="plain">More settings</button>
+      <button id="close" type="button" class="plain">Done</button>
+    </div>
+  </div>
+  <div id="stats-box"><ul id="stats"></ul></div>
+  <footer>
+    <div id="raid" aria-live="polite"></div>
+    <p id="raid-error" class="problem" role="alert" hidden></p>
+  </footer>
+  <script src="/dock.js"></script>
+</body>
+</html>

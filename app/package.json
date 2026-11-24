@@ -1,0 +1,13 @@
+{
+  "name": "raid-random",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Live Twitch stats and a raid button inside OBS",
+  "main": "src/main.js",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/main.js",
+    "demo": "node src/main.js --demo",
+    "test": "node --test"
+  }
+}
