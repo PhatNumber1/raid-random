@@ -10,7 +10,12 @@
 <body>
   <header>
     <span id="status" class="status">Connecting</span>
-    <span id="demo" class="demo" hidden>Demo numbers</span>
+    <div class="left">
+      <span id="timer" class="timer" title="Time until the next update" hidden>
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.600" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.500-5.800M20 3v5h-5"/></svg><span id="next-in"></span>
+      </span>
+    </div>
+    <span id="demo" class="demo" hidden>Demo</span>
     <button id="gear" type="button" class="gear" title="Settings" aria-label="Settings" aria-expanded="false" aria-controls="panel">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/><circle cx="12" cy="12" r="6.6"/></svg>
     </button>
@@ -18,6 +23,7 @@
   <p id="message" role="status" hidden></p>
   <div id="panel" hidden>
     <fieldset id="choices"><legend>Show in the dock</legend></fieldset>
+    <label class="every">Update every <input id="refresh" type="number" inputmode="numeric" step="1"> sec</label>
     <p id="panel-note" class="small" role="status"></p>
     <div class="pair">
       <button id="more" type="button" class="plain">More settings</button>

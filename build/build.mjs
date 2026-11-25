@@ -62,7 +62,7 @@ if (at < 0 || bin.indexOf(`${FUSE}:0`, at + 1) >= 0) throw new Error('Unexpected
 bin[at + FUSE.length + 1] = '1'.charCodeAt(0);
 const draft = path.join(work, 'draft.exe');
 fs.writeFileSync(draft, bin);
-powershell(['-File', path.join(root, 'build', 'add-resource.ps1'), '-Exe', draft, '-Blob', path.join(work, 'app.blob')]);
+powershell(['-File', path.join(root, 'build', 'add-resource.ps1'), '-Exe', draft, '-Blob', path.join(work, 'app.blob'), '-Icon', path.join(root, 'build', 'icon.ico')]);
 
 // Only a complete and working .exe gets the final name.
 const check = execFileSync(draft, ['--version-check'], { encoding: 'utf8' });

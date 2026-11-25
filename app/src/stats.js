@@ -13,14 +13,16 @@ const STATS = [
 ];
 const DEFAULT_STATS = STATS.filter((s) => s.on).map((s) => s.id);
 
-const EVERY_MS = 5 * 1000; // every number, as long as Twitch is happy with it
+// How often to ask Twitch, in seconds. Faster than 2 would get close to Twitch's limit.
+const REFRESH = { min: 2, max: 3600, usual: 5 };
+const isRefresh = (n) => Number.isInteger(n) && n >= REFRESH.min && n <= REFRESH.max;
 const SLOW_MS = 60 * 1000; // after Twitch says "too many requests"
 
 function startOfDay(ms) { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); }
 
 class Stats {
-  constructor({ api, auth, store, getSelected, now = Date.now, log = () => {} }) {
-    Object.assign(this, { api, auth, store, getSelected, now, log });
+  constructor({ api, auth, store, getSelected, getRefresh = () => REFRESH.usual, now = Date.now, log = () => {} }) {
+    Object.assign(this, { api, auth, store, getSelected, getRefresh, now, log });
     this.running = false;
     this.run = 0;
     this.reset();
@@ -32,6 +34,7 @@ class Stats {
     this.subsTotal = null;
     this.errors = {};
     this.updatedAt = null;
+    this.nextAt = null;
   }
 
   start() {
@@ -49,16 +52,19 @@ class Stats {
 
   async loop(run) {
     const began = this.now();
+    this.nextAt = null; // asking right now
     await this.poll();
     if (!this.running || run !== this.run) return;
-    this.timer = setTimeout(() => this.loop(run), this.pause(this.now() - began));
+    const wait = this.pause(this.now() - began);
+    this.nextAt = this.now() + wait;
+    this.timer = setTimeout(() => this.loop(run), wait);
     this.timer.unref?.();
   }
 
-  // 5 seconds from start to start, however long Twitch took to answer.
+  // The chosen time from start to start, however long Twitch took to answer.
   pause(took) {
-    if (Object.values(this.errors).some((err) => err.status === 429)) return SLOW_MS;
-    return Math.max(1000, EVERY_MS - took);
+    if (Object.values(this.errors).some((err) => err.status === 429)) return Math.max(SLOW_MS, this.getRefresh() * 1000);
+    return Math.max(1000, this.getRefresh() * 1000 - took);
   }
 
   // Today's running totals, which start over at midnight or for a different account.
@@ -146,10 +152,11 @@ class Stats {
     return {
       live: live === undefined ? null : Boolean(live),
       updatedAt: this.updatedAt,
+      nextIn: this.nextAt === null ? null : Math.max(0, Math.ceil((this.nextAt - this.now()) / 1000)),
       problem: this.errors.stream ? 'Cannot reach Twitch. Trying again...' : null,
       items: STATS.filter((s) => this.getSelected().includes(s.id)).map((s) => ({ id: s.id, label: s.label, ...all[s.id] })),
     };
   }
 }
 
-module.exports = { Stats, STATS, DEFAULT_STATS };
+module.exports = { Stats, STATS, DEFAULT_STATS, REFRESH, isRefresh };

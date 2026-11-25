@@ -168,6 +168,28 @@ test('stats: every number is asked each time, every 5 seconds, slower only if Tw
   assert.equal(stats.pause(0), 5000);
 });
 
+test('stats: the chosen refresh time is used, and the countdown shows it', async () => {
+  let now = 1000000;
+  let seconds = 20;
+  const stats = new Stats({
+    auth: { user: { id: '7' } }, store: new MemoryStore(), getSelected: () => ['viewers'], getRefresh: () => seconds, now: () => now,
+    api: { stream: async () => null },
+  });
+  assert.equal(stats.pause(500), 19500);
+  assert.equal(stats.snapshot().nextIn, null);
+  stats.start();
+  await tick();
+  assert.equal(stats.snapshot().nextIn, 20);
+  now += 12300;
+  assert.equal(stats.snapshot().nextIn, 8);
+  now += 60000;
+  assert.equal(stats.snapshot().nextIn, 0);
+  seconds = 600;
+  stats.errors.stream = { status: 429 };
+  assert.equal(stats.pause(0), 600000); // never faster than chosen
+  stats.stop();
+});
+
 test('stats: today survives a restart but not a change of account', () => {
   const store = new MemoryStore();
   const make = (id) => new Stats({ auth: { user: { id } }, store, api: {}, getSelected: () => ALL });
@@ -307,12 +329,20 @@ test('server: our pages work, other websites are refused', async () => {
     assert.equal((await save('{"stats":["nope"]}')).status, 400);
     assert.equal((await save('not json')).status, 400);
     assert.equal((await save('{"stats":["peak","viewers"]}')).status, 200);
-    assert.deepEqual(settings, { stats: ['viewers', 'peak'], dock: true, autostart: true, saved: true });
+    assert.deepEqual(settings, { stats: ['viewers', 'peak'], dock: true, autostart: true, refresh: 5, saved: true });
+    assert.equal((await save('{"stats":["peak"],"refresh":30}')).status, 200);
+    assert.equal(settings.refresh, 30);
+    assert.equal((await save('{"stats":["peak"]}')).status, 200);
+    assert.equal(settings.refresh, 30); // left out means unchanged
+    const every = (b) => ask('POST', '/api/refresh', { 'X-Raid-Random-Key': key }, b);
+    for (const good of [2, 10, 3600]) { assert.equal((await every(JSON.stringify({ seconds: good }))).status, 200); assert.equal(settings.refresh, good); }
+    for (const bad of [1, 0, -5, 2.5, 3601, '10', null]) assert.equal((await every(JSON.stringify({ seconds: bad }))).status, 400);
+    assert.equal(settings.refresh, 3600);
     settings = { ...settings, dock: false, autostart: false };
     assert.equal((await post('/api/finish')).status, 200);
     const gear = (b) => ask('POST', '/api/stats', { 'X-Raid-Random-Key': key }, b);
     assert.equal((await gear('{"stats":["uptime"],"dock":true,"autostart":true}')).status, 200);
-    assert.deepEqual(settings, { stats: ['uptime'], dock: false, autostart: false, saved: true }); // only the stats
+    assert.deepEqual(settings, { stats: ['uptime'], dock: false, autostart: false, refresh: 3600, saved: true }); // only the stats
     for (const bad of ['{"stats":[]}', '{"stats":["nope"]}', '{}']) assert.equal((await gear(bad)).status, 400);
   } finally { server.close(); }
 });

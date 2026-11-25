@@ -30,5 +30,7 @@ code { padding: .1rem .35rem; border-radius: 4px; background: #f3f3f6; font-fami
 fieldset { margin: 0 0 .5rem; padding: 0; border: 0; }
 label { display: flex; gap: .65rem; align-items: flex-start; padding: .4rem 0; cursor: pointer; }
 label input { width: 1.1rem; height: 1.1rem; margin: .22rem 0 0; accent-color: #5b2fc4; flex: none; }
+.every { align-items: center; margin-top: .5rem; }
+label input[type=number] { width: 5.5rem; height: auto; margin: 0; padding: .3rem .5rem; border: 1px solid #8a8a94; border-radius: 6px; font: inherit; }
 label small { display: block; color: #5c5c66; font-size: .85rem; }
 .hide { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

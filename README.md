@@ -12,7 +12,8 @@ for a real raid so far.
 ## What it does
 
 - **Stats in OBS:** viewers, peak viewers, new followers, new subs, stream time, total followers
-  and subs. You choose which, with the gear in the dock.
+  and subs. You choose which, and how often they update, with the gear in the dock. A small timer
+  shows when the next update comes.
 - **Raid button:** suggests a live channel in your category with a similar number of viewers. You
   see the name and confirm before anything happens.
 - **Careful ending:** your stream is only stopped after Twitch confirms that exact raid, with a

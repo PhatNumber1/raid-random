@@ -82,6 +82,19 @@ function fit() {
 }
 new ResizeObserver(() => fit()).observe(document.documentElement);
 
+// 8s, 1:05, 1:00:00
+function shortTime(n) {
+  if (n < 60) return `${n}s`;
+  const two = (x) => String(x).padStart(2, '0');
+  const h = Math.floor(n / 3600);
+  return h ? `${h}:${two(Math.floor(n / 60) % 60)}:${two(n % 60)}` : `${Math.floor(n / 60)}:${two(n % 60)}`;
+}
+
+function showTimer(stats) {
+  $('timer').hidden = !stats;
+  if (stats) $('next-in').textContent = stats.nextIn === null ? '…' : shortTime(stats.nextIn);
+}
+
 function show({ status, live = false, message = '', items = [] }) {
   $('status').textContent = status;
   $('status').classList.toggle('live', live);
@@ -227,6 +240,7 @@ function panel(open) {
   $('gear').setAttribute('aria-expanded', String(open));
   $('panel-note').textContent = '';
   if (!open) return;
+  Object.assign($('refresh'), { min: last.refreshLimits.min, max: last.refreshLimits.max, value: last.settings.refresh });
   for (const old of $('choices').querySelectorAll('label')) old.remove();
   for (const stat of last.available) {
     const label = add($('choices'), 'label', '');
@@ -250,8 +264,14 @@ async function more() {
   try { await post('/api/show-window'); } catch (err) { $('panel-note').textContent = err.message; }
 }
 
-// Every tick is saved right away, one after the other.
+// Every change is saved right away, one after the other.
 let saving = Promise.resolve();
+$('refresh').onchange = () => {
+  const seconds = $('refresh').valueAsNumber;
+  saving = saving.then(async () => {
+    try { last.settings = (await post('/api/refresh', { seconds })).settings; $('panel-note').textContent = 'Saved'; } catch (err) { $('panel-note').textContent = err.message || 'Could not save.'; $('refresh').value = last.settings.refresh; }
+  });
+};
 $('choices').onchange = (e) => {
   const stats = [...$('choices').querySelectorAll('input:checked')].map((b) => b.value);
   if (!stats.length) { e.target.checked = true; $('panel-note').textContent = 'Keep at least one.'; return; }
@@ -275,6 +295,7 @@ async function load() {
     if (!res.ok) throw new Error();
     const s = await res.json();
     last = s;
+    showTimer(s.stats);
     $('demo').hidden = !s.demo;
     if (!s.stats && !$('panel').hidden) panel(false);
     showRaid(s.raid);
@@ -289,6 +310,7 @@ async function load() {
   } catch {
     show({ status: 'Not running', message: 'Start Raid Random, and this dock will catch up.' });
     showRaid(null);
+    showTimer(null);
     return null;
   }
 }

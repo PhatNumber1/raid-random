@@ -4,7 +4,7 @@
 // must use our exact address, and every API call needs a key only our pages are given.
 const http = require('node:http');
 const crypto = require('node:crypto');
-const { STATS } = require('./stats');
+const { STATS, REFRESH, isRefresh } = require('./stats');
 const { readPublic } = require('./files');
 
 const PAGES = { '/': 'setup.html', '/dock': 'dock.html' };
@@ -43,11 +43,17 @@ function checkStats(input) {
   return known.filter((id) => input.stats.includes(id));
 }
 
-function checkSettings(input) {
+function checkRefresh(value) {
+  if (!isRefresh(value)) throw new BadRequest(`Choose a whole number from ${REFRESH.min} to ${REFRESH.max} seconds.`);
+  return value;
+}
+
+function checkSettings(input, now = {}) {
   return {
     stats: checkStats(input),
     dock: input.dock !== false,
     autostart: input.autostart !== false,
+    refresh: input.refresh === undefined ? now.refresh ?? REFRESH.usual : checkRefresh(input.refresh),
     saved: true,
   };
 }
@@ -78,6 +84,7 @@ function createServer({ auth, stats, settings, installer = null, raid = null, ne
       demo,
       auth: auth.status(),
       settings: settings.get(),
+      refreshLimits: REFRESH,
       available: STATS.map(({ id, label, note }) => ({ id, label, note })),
       stats: auth.user ? stats.snapshot(subsState()) : null,
       raid: raid && auth.user ? raid.view() : null,
@@ -94,8 +101,14 @@ function createServer({ auth, stats, settings, installer = null, raid = null, ne
       stats.refreshNow();
       return { settings: next };
     },
+    'POST /api/refresh': async (req) => {
+      const next = { ...settings.get(), refresh: checkRefresh((await readBody(req)).seconds) };
+      settings.set(next);
+      stats.refreshNow();
+      return { settings: next };
+    },
     'POST /api/settings': async (req) => {
-      const next = checkSettings(await readBody(req));
+      const next = checkSettings(await readBody(req), settings.get());
       settings.set(next);
       stats.refreshNow();
       const obs = installer ? await installer.apply(next) : null;

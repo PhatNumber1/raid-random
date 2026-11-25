@@ -84,7 +84,7 @@ function draw() {
   $('next').textContent = !wizard ? 'Save' : now === 'install' ? 'Install' : now === 'done' ? 'Finish' : 'Next';
   const needsSignIn = !wizard || now === 'signin' || now === 'install';
   const needsStats = !wizard || now === 'stats' || now === 'install';
-  $('next').disabled = busy || (needsSignIn && !signedIn) || (needsStats && !chosen().length);
+  $('next').disabled = busy || (needsSignIn && !signedIn) || (needsStats && (!chosen().length || !$('refresh').checkValidity()));
   $('back').disabled = busy;
 }
 
@@ -104,6 +104,8 @@ async function refresh() {
     if (wizard === null) {
       wizard = !state.settings.saved;
       drawChoices(state.available, state.settings.stats);
+      Object.assign($('refresh'), { min: state.refreshLimits.min, max: state.refreshLimits.max, value: state.settings.refresh });
+      $('refresh-note').textContent = `From ${state.refreshLimits.min} to ${state.refreshLimits.max} seconds. New subs always show right away.`;
       $('dock').checked = state.settings.dock;
       $('autostart').checked = state.settings.autostart;
     }
@@ -127,7 +129,7 @@ async function act(button, work) {
   if (failed) problem(failed.message);
 }
 
-const save = () => call('POST', '/api/settings', { stats: chosen(), dock: $('dock').checked, autostart: $('autostart').checked });
+const save = () => call('POST', '/api/settings', { stats: chosen(), refresh: $('refresh').valueAsNumber, dock: $('dock').checked, autostart: $('autostart').checked });
 
 $('next').onclick = () => {
   if (!wizard) { act($('next'), async () => { await save(); $('saved').textContent = 'Saved'; }); return; }
@@ -142,6 +144,7 @@ $('activate').onclick = () => act($('activate'), () => call('POST', '/api/open-t
 $('cancel').onclick = () => act($('cancel'), () => call('POST', '/api/logout'));
 $('logout').onclick = () => act($('logout'), () => call('POST', '/api/logout'));
 $('quit').onclick = () => act($('quit'), () => call('POST', '/api/quit', { by: 'page' }).then(() => window.close()));
+document.querySelector('main').oninput = () => { if (state) draw(); };
 document.querySelector('main').onchange = () => { $('saved').textContent = ''; if (state) draw(); };
 
 refresh();
