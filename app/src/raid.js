@@ -2,10 +2,11 @@
 // The raid button, as a list of states the dock shows:
 //   idle -> searching -> confirm -> starting -> countdown -> stopping -> stopped
 //   ask   = we are not sure, so the stream keeps running and you decide
+//   nobody = no one to raid: you decide whether the stream ends anyway
 //   error = something went wrong before any raid began
 // The stream is stopped in exactly two cases: Twitch confirmed THIS raid, or you pressed the button.
 const crypto = require('node:crypto');
-const { findCandidates, findNetworkCandidates, choose } = require('./picker');
+const { findCandidates, findElsewhere, findNetworkCandidates, forStage, choose, range, TIERS } = require('./picker');
 
 const CANDIDATES_FRESH_MS = 2 * 60 * 1000;
 const REMEMBER = 50;
@@ -15,9 +16,9 @@ class UserError extends Error { constructor(m) { super(m); this.userError = true
 class Raid {
   constructor({
     api, auth, obs, lineReady, store, network = null, now = Date.now, rng = Math.random, log = () => {},
-    countdownMs = 90000, giveUpMs = 180000, graceMs = 5000,
+    countdownMs = 90000, giveUpMs = 180000, graceMs = 5000, searchPauseMs = 3000,
   }) {
-    Object.assign(this, { api, auth, obs, lineReady, store, network, now, rng, log, countdownMs, giveUpMs, graceMs });
+    Object.assign(this, { api, auth, obs, lineReady, store, network, now, rng, log, countdownMs, giveUpMs, graceMs, searchPauseMs });
     this.step = 0;
     this.set('idle');
     this.skipped = new Set();
@@ -35,9 +36,9 @@ class Raid {
   get busy() { return ['starting', 'countdown', 'stopping'].includes(this.state); }
 
   view() {
-    const { target, message, note, endsAt } = this.info;
+    const { target, message, note, endsAt, part, parts } = this.info;
     return {
-      state: this.state, message, note,
+      state: this.state, message, note, part, parts,
       target: target && { id: target.user_id, name: target.user_name, login: target.user_login, viewers: target.viewer_count, game: target.game_name },
       secondsLeft: endsAt ? Math.max(0, Math.ceil((endsAt - this.now()) / 1000)) : undefined,
     };
@@ -67,47 +68,103 @@ class Raid {
 
   // Find someone (the main button), or someone else ("Pick another").
   async find(note) {
-    this.need('idle', 'confirm', 'error', 'stopped');
+    this.need('idle', 'confirm', 'nobody', 'error', 'stopped');
     if (this.state === 'confirm') this.skipped.add(this.info.target.user_id);
     else { this.skipped.clear(); this.candidates = null; }
     const step = this.set('searching');
+    let passed = false;
     try {
       const mine = await this.ready();
+      passed = true;
       if (step !== this.step) return;
       const website = this.network?.available ? this.network : null;
       const plan = website ? await website.plan() : { mode: 'anyone', members: [] };
       if (step !== this.step) return;
       const me = this.auth.user.id;
-      const old = this.candidates;
-      const fresh = old && old.mode === plan.mode && old.game === mine.game_id && this.now() - old.at < CANDIDATES_FRESH_MS;
-      let list = fresh ? old.list : null;
-      if (!list) {
-        list = plan.mode === 'network'
-          ? await findNetworkCandidates(this.api, mine, plan.members, new Set([me]))
-          : await findCandidates(this.api, mine, new Set([me]));
-        if (step !== this.step) return;
-        this.candidates = { mode: plan.mode, game: mine.game_id, at: this.now(), list };
-      }
       const again = this.skipped.size > 0;
-      const open = list.filter((s) => !this.skipped.has(s.user_id));
-      let target; let reason; let ref = null;
-      if (website) {
-        ref = crypto.randomUUID();
-        const answer = await website.pick(ref, mine, open, again);
+      const steps = this.searchSteps(plan.mode, mine);
+      let reason = null;
+      for (const [i, s] of steps.entries()) {
+        // What the dock shows while this step runs.
+        this.info = { message: s.text, part: i + 1, parts: steps.length };
+        const list = await this.streamsFor(s.stage, mine, plan, me);
         if (step !== this.step) return;
-        target = open.find((s) => s.user_id === answer.target);
-        reason = answer.reason;
-      } else {
-        const last = this.history().filter((h) => ['started', 'confirmed'].includes(h.result)).pop()?.id;
-        target = choose(open.filter((s) => s.user_id !== last), mine.viewer_count, this.rng);
+        const open = list.filter((x) => !this.skipped.has(x.user_id));
+        const last = i === steps.length - 1;
+        let target; let ref = null;
+        if (website && (open.length || last)) {
+          ref = crypto.randomUUID();
+          const answer = await website.pick(ref, mine, open, { again, stage: s.stage, tiers: s.tiers, last });
+          if (step !== this.step) return;
+          target = open.find((x) => x.user_id === answer.target);
+          reason = answer.reason;
+        } else if (!website) {
+          const before = this.history().filter((h) => ['started', 'confirmed'].includes(h.result)).pop()?.id;
+          target = choose(open.filter((x) => x.user_id !== before), mine.viewer_count, this.rng, s.stage, s.tiers);
+        }
+        if (target) {
+          this.ref = ref;
+          this.set('confirm', { target, note: [note, s.wider].filter(Boolean).join(' ') || undefined });
+          return;
+        }
+        if (last) break;
+        // A moment to read it, and to press Cancel.
+        this.info = { message: s.none, note: steps[i + 1].next, part: i + 1, parts: steps.length, endsAt: this.now() + this.searchPauseMs };
+        await new Promise((done) => setTimeout(done, this.searchPauseMs));
+        if (step !== this.step) return;
       }
-      if (!target) throw new UserError(again ? 'Nobody else fits right now.' : `${reason || 'No live channel of a similar size was found'}. Nobody was raided.`);
-      this.ref = ref;
-      this.set('confirm', { target, note });
+      throw new UserError(again ? 'Nobody else fits right now.' : `${reason || 'No live channel was found'}. Nobody was raided.`);
     } catch (err) {
-      if (step === this.step) this.trouble(err);
+      if (step !== this.step) return;
+      if (passed) this.nobody(err);
+      else this.trouble(err);
     }
   }
+
+  // From "just like you" to "anyone at all". Network only never leaves the network.
+  searchSteps(mode, mine) {
+    if (mode === 'network') return [{ stage: 1, tiers: 3, text: 'Searching the Raid Random network...' }];
+    const game = mine.game_name || 'your category';
+    const similar = TIERS.map((t, i) => {
+      const [low, high] = range(mine.viewer_count, t);
+      return {
+        stage: 1, tiers: i + 1, text: `Searching ${game} for ${low} to ${high} viewers...`, none: `Nobody with ${low} to ${high} viewers in ${game}.`,
+        next: `Widening the range to ${low} to ${high} viewers`,
+      };
+    });
+    return [
+      ...similar,
+      { stage: 2, text: `Searching ${game}, any size...`, none: `Nobody to raid in ${game}.`, next: 'Widening to any size', wider: 'Nobody your size in your category. This is one of the closest.' },
+      { stage: 3, text: 'Searching other categories...', next: 'Widening to other categories', wider: 'Nobody found in your category. This is a different one.' },
+    ];
+  }
+
+  // The channels for one step of the search. What was found is kept for "Pick another".
+  async streamsFor(stage, mine, plan, me) {
+    const old = this.candidates;
+    const fresh = old && old.mode === plan.mode && old.game === mine.game_id && this.now() - old.at < CANDIDATES_FRESH_MS;
+    if (!fresh) this.candidates = { mode: plan.mode, game: mine.game_id, at: this.now(), near: null, far: null };
+    const c = this.candidates;
+    if (plan.mode === 'network') {
+      c.near ||= await findNetworkCandidates(this.api, mine, plan.members, new Set([me]));
+      return c.near;
+    }
+    if (stage === 3) {
+      c.far ||= await findElsewhere(this.api, mine, new Set([me]), this.rng);
+      return forStage(c.far, mine.viewer_count, 3);
+    }
+    c.near ||= await findCandidates(this.api, mine, new Set([me]));
+    return forStage(c.near, mine.viewer_count, stage);
+  }
+
+  // Nobody to raid, or no way to find out. The stream keeps running until you decide.
+  nobody(err) {
+    if (!err.userError) this.log(`Raid: ${err.message}`);
+    this.set('nobody', { message: err.userError ? err.message : `Twitch could not be searched: ${err.message}. Nobody was raided.` });
+  }
+
+  // You chose to end without a raid.
+  async endAnyway() { this.need('nobody'); await this.stop(null); }
 
   trouble(err) {
     if (!err.userError) this.log(`Raid: ${err.message}`);
@@ -146,7 +203,7 @@ class Raid {
       if (sent && err.status === 429) { this.tell('too_many'); return this.trouble(new UserError('Twitch allows 10 raid tries per 10 minutes. Please wait a little.')); }
       if (sent && err.name !== 'SignedOutError' && (!err.status || err.status >= 500)) return this.unsure(err);
       if (sent) this.tell('twitch');
-      return this.trouble(err);
+      return sent ? this.trouble(err) : this.nobody(err);
     }
     this.remember(target, 'started');
     if (step !== this.step) return; // the confirmation was faster than the reply
@@ -186,7 +243,7 @@ class Raid {
   signedOut() { if (!this.busy && this.state !== 'ask') this.set('idle'); }
 
   async cancel() {
-    this.need('searching', 'confirm', 'error', 'stopped', 'countdown');
+    this.need('searching', 'confirm', 'nobody', 'error', 'stopped', 'countdown');
     if (this.state !== 'countdown') { this.set('idle'); return; }
     const step = this.step;
     const { target } = this.info;

@@ -163,9 +163,9 @@ class Network {
   }
 
   // Which of these may be raided? The website decides, not this app.
-  pick(ref, mine, streams, again) {
+  pick(ref, mine, streams, { again = false, stage = 1, tiers = 3, last = true } = {}) {
     return this.must('POST', '/api/pick', {
-      ref, again, viewers: mine.viewer_count,
+      ref, again, stage, tiers, last, viewers: mine.viewer_count,
       candidates: streams.map((s) => ({ id: s.user_id, login: s.user_login, viewers: s.viewer_count, same: s.same === true })),
     });
   }

@@ -38,3 +38,14 @@ label input { width: 1.1rem; height: 1.1rem; margin: .22rem 0 0; accent-color: #
 label input[type=number] { width: 5.5rem; height: auto; margin: 0; padding: .3rem .5rem; border: 1px solid #8a8a94; border-radius: 6px; font: inherit; }
 label small { display: block; color: #5c5c66; font-size: .85rem; }
 .hide { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+/* The color wheel. The middle is white, the edge is the full color. */
+.wheel { position: relative; flex: none; width: 112px; height: 112px; border-radius: 50%; cursor: crosshair; touch-action: none; }
+.wheel-dot { position: absolute; width: 16px; height: 16px; border: 2px solid #111; border-radius: 50%; box-shadow: 0 0 0 2px #fff; transform: translate(-50%, -50%); pointer-events: none; }
+.color-row { display: flex; align-items: center; gap: 1.25rem; margin-top: .75rem; }
+.color-row p { margin: 0 0 .5rem; }
+.preview { display: inline-block; padding: .4rem .9rem; border: 1px solid #454854; border-radius: 8px; background: #2b2d35; color: #f1f1f4; }
+.preview strong { color: #fff; font-size: 1.3rem; }
+.color-row button { display: block; }
+select { padding: .3rem .5rem; border: 1px solid #8a8a94; border-radius: 6px; background: #fff; font: inherit; }
+.color-row .every { margin: 0 0 .5rem; }

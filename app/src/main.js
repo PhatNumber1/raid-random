@@ -12,7 +12,7 @@ const { FileStore, MemoryStore } = require('./store');
 const { TwitchAuth } = require('./twitch-auth');
 const { TwitchApi } = require('./twitch-api');
 const { EventSub } = require('./eventsub');
-const { Stats, DEFAULT_STATS, STATS, REFRESH, isRefresh } = require('./stats');
+const { Stats, DEFAULT_STATS, STATS, REFRESH, isRefresh, cleanColors } = require('./stats');
 const { Installer } = require('./installer');
 const { createServer, APP_HEADER } = require('./server');
 const { Network } = require('./network');
@@ -60,9 +60,9 @@ const showWindow = () => {
 function loadSettings() {
   const s = store.load('settings');
   const known = STATS.map((x) => x.id);
-  if (!s || !Array.isArray(s.stats)) return { stats: DEFAULT_STATS, dock: true, autostart: true, refresh: REFRESH.usual, saved: false };
+  if (!s || !Array.isArray(s.stats)) return { stats: DEFAULT_STATS, dock: true, autostart: true, refresh: REFRESH.usual, colors: {}, saved: false };
   return {
-    stats: s.stats.filter((id) => known.includes(id)), dock: s.dock !== false, autostart: s.autostart !== false, refresh: isRefresh(s.refresh) ? s.refresh : REFRESH.usual, saved: true,
+    stats: s.stats.filter((id) => known.includes(id)), dock: s.dock !== false, autostart: s.autostart !== false, refresh: isRefresh(s.refresh) ? s.refresh : REFRESH.usual, colors: cleanColors(s.colors), saved: true,
   };
 }
 let current = loadSettings();

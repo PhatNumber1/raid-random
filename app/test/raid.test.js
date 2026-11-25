@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { MemoryStore } = require('../src/store');
-const { findCandidates, choose, range, TIERS } = require('../src/picker');
+const { findCandidates, findElsewhere, forStage, choose, range, TIERS } = require('../src/picker');
 const { Raid } = require('../src/raid');
 const { Obs, answer } = require('../src/obs');
 const { EventSub } = require('../src/eventsub');
@@ -35,9 +35,36 @@ test('picking: widens only when nobody fits, and stops at ±200%', () => {
   assert.equal(pick(61, 9000), null);
 });
 
-test('picking: leaves out the excluded, non-live and far too big', async () => {
+test('picking: leaves out the excluded and non-live, and offers the right ones at each step', async () => {
   const api = pages([[ch('a', 900), ch('b', 24), ch('b', 24), ch('c', 18), ch('d', 22, { type: '' }), ch('e', 2)]]);
-  assert.deepEqual((await findCandidates(api, MINE, new Set(['c']))).map((s) => s.user_id), ['b', 'e']);
+  const all = await findCandidates(api, MINE, new Set(['c']));
+  assert.deepEqual(all.map((s) => s.user_id), ['a', 'b', 'e']);
+  assert.deepEqual(forStage(all, 20, 1).map((s) => s.user_id), ['b', 'e']); // similar size only
+  assert.deepEqual(forStage(all, 20, 2).map((s) => s.user_id), ['b', 'e', 'a']); // any size, closest first
+});
+
+test('picking: one range at a time, then any size, then other categories', () => {
+  const list = [ch('a', 35), ch('b', 55), ch('c', 5000)];
+  assert.equal(choose(list, 20, () => 0, 1, 1), null);
+  assert.equal(choose(list, 20, () => 0, 1, 2).user_id, 'a');
+  assert.equal(choose([ch('b', 55)], 20, () => 0, 1, 2), null);
+  assert.equal(choose([ch('b', 55)], 20, () => 0, 1, 3).user_id, 'b');
+  assert.equal(choose([ch('c', 5000)], 20, () => 0, 1, 3), null);
+  assert.equal(choose([ch('c', 5000)], 20, () => 0, 2).user_id, 'c');
+  assert.equal(choose([ch('c', 5000)], 20, () => 0, 3).user_id, 'c');
+  assert.equal(choose([], 20, () => 0, 3), null);
+});
+
+test('picking: other categories are random, never your own, and limited', async () => {
+  const asked = [];
+  const api = {
+    topGames: async ({ after }) => ({ data: after ? [] : [{ id: 'g' }, ...Array.from({ length: 30 }, (_, i) => ({ id: `x${i}` }))], cursor: null }),
+    liveStreams: async ({ gameId, language }) => { asked.push(gameId); assert.equal(language, 'en'); return { data: [ch(`s${gameId}`, 9000)], cursor: null }; },
+  };
+  const got = await findElsewhere(api, MINE, new Set(['sx1']));
+  assert.equal(asked.length, 8); // nobody of a similar size, so it looks in 8 and stops
+  assert.ok(!asked.includes('g') && new Set(asked).size === 8);
+  assert.ok(!got.some((s) => s.user_id === 'sx1'));
 });
 
 test('picking: stops reading once channels are too small to matter', async () => {
@@ -65,10 +92,11 @@ function setup(over = {}) {
   t.store = new MemoryStore();
   t.raid = new Raid({
     auth: { user: { id: 'me' } }, store: t.store, rng: () => 0, lineReady: () => t.line,
-    countdownMs: 60, giveUpMs: 120, graceMs: 30, ...t.times,
+    countdownMs: 60, giveUpMs: 120, graceMs: 30, searchPauseMs: 0, ...t.times,
     api: {
       stream: async (id) => (id === 'me' ? (t.live ? { ...MINE, game_id: t.game ?? 'g' } : null) : (t.gone === id ? null : ch(id, 20))),
-      liveStreams: async () => ({ data: t.targets, cursor: null }),
+      liveStreams: async ({ gameId }) => ({ data: gameId === 'g' ? t.targets : t.elsewhere || [], cursor: null }),
+      topGames: async () => { if (t.topFails) throw new Error('timeout'); return { data: [{ id: 'g' }, { id: 'other' }], cursor: null }; },
       startRaid: async (from, to) => { t.raids.push(to); return t.start(); },
       cancelRaid: async () => { t.cancels++; return t.cancel(); },
     },
@@ -142,7 +170,7 @@ test('raid: pressing twice raids once', async () => {
 });
 
 test('raid: is refused when something is not ready', async () => {
-  for (const [over, text] of [[{ live: false }, /not live/], [{ game: '' }, /category/], [{ streaming: false }, /not streaming/], [{ streaming: 'error' }, /Cannot reach OBS/], [{ line: false }, /connecting/], [{ targets: [] }, /No live channel of a similar size/]]) {
+  for (const [over, text] of [[{ live: false }, /not live/], [{ game: '' }, /category/], [{ streaming: false }, /not streaming/], [{ streaming: 'error' }, /Cannot reach OBS/], [{ line: false }, /connecting/]]) {
     const t = setup(over);
     await t.raid.find();
     assert.equal(t.raid.state, 'error');
@@ -150,12 +178,85 @@ test('raid: is refused when something is not ready', async () => {
   }
 });
 
+test('search: widens step by step, and says so', async () => {
+  const seen = [];
+  const t = setup({ targets: [ch('far', 55)], times: { searchPauseMs: 25 } });
+  const watch = setInterval(() => { const v = t.raid.view(); if (v.state === 'searching' && v.message && !seen.includes(v.message)) seen.push(v.message); }, 2);
+  await t.raid.find();
+  clearInterval(watch);
+  assert.equal(t.raid.view().target.id, 'far');
+  assert.ok(seen.some((m) => /Nobody with 10 to 30 viewers/.test(m)), seen.join('|'));
+  assert.ok(seen.some((m) => /Nobody with 0 to 40 viewers/.test(m)));
+  assert.equal(t.raid.view().note, undefined); // still a similar size
+});
+
+test('search: any size in the category, then other categories, each with a note', async () => {
+  const a = setup({ targets: [ch('big', 5000)] });
+  await a.raid.find();
+  assert.equal(a.raid.view().target.id, 'big');
+  assert.match(a.raid.view().note, /one of the closest/);
+  const b = setup({ targets: [], elsewhere: [ch('else', 22)] });
+  await b.raid.find();
+  assert.equal(b.raid.view().target.id, 'else');
+  assert.match(b.raid.view().note, /different one/);
+  assert.deepEqual([...a.raids, ...b.raids], []); // you still confirm
+});
+
+test('search: the steps shown match what is searched', () => {
+  const steps = setup().raid.searchSteps('anyone', { viewer_count: 20, game_name: 'GTA 6' });
+  assert.deepEqual(steps.map((s) => s.text), ['Searching GTA 6 for 10 to 30 viewers...', 'Searching GTA 6 for 0 to 40 viewers...', 'Searching GTA 6 for 0 to 60 viewers...', 'Searching GTA 6, any size...', 'Searching other categories...']);
+  assert.equal(setup().raid.searchSteps('network', { viewer_count: 20 }).length, 1);
+});
+
+test('search: can be cancelled while it counts down to the next step', async () => {
+  const t = setup({ targets: [], times: { searchPauseMs: 40 } });
+  const search = t.raid.find();
+  await wait(10);
+  assert.equal(t.raid.state, 'searching');
+  assert.ok(t.raid.view().secondsLeft >= 0);
+  await t.raid.cancel();
+  await search;
+  assert.equal(t.raid.state, 'idle');
+});
+
+test('nobody: the stream keeps running until you choose to end it', async () => {
+  for (const over of [{ targets: [] }, { targets: [], topFails: true }]) {
+    const t = setup(over);
+    await assert.rejects(t.raid.endAnyway(), /not possible/); // only when nobody was found
+    await t.raid.find();
+    assert.equal(t.raid.state, 'nobody');
+    assert.match(t.raid.view().message, /Nobody was raided/);
+    await wait(40);
+    assert.equal(t.stops, 0);
+    await t.raid.endAnyway();
+    assert.equal(t.stops, 1);
+    assert.equal(t.raid.state, 'stopped');
+    assert.equal(t.raid.view().target ?? null, null);
+  }
+  const t = setup({ targets: [] });
+  await t.raid.find();
+  await t.raid.cancel(); // keep streaming
+  assert.deepEqual([t.raid.state, t.stops], ['idle', 0]);
+});
+
+test('nobody: if OBS does not stop you are told, and can try again', async () => {
+  let fail = true;
+  const t = setup({ targets: [], stop: async () => { if (fail) throw new Error('OBS did not answer.'); } });
+  await t.raid.find();
+  await t.raid.endAnyway();
+  assert.equal(t.raid.state, 'ask');
+  fail = false;
+  await t.raid.stopNow();
+  assert.equal(t.raid.state, 'stopped');
+});
+
 test('raid: OBS closing between picking and confirming means no raid', async () => {
   const t = setup();
   await t.raid.find();
   t.streaming = false;
   await t.raid.go('a');
-  assert.equal(t.raid.state, 'error');
+  assert.equal(t.raid.state, 'nobody');
+  assert.equal(t.stops, 0);
   assert.equal(t.raids.length, 0);
 });
 

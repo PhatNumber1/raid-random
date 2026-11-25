@@ -55,6 +55,14 @@
       <fieldset id="choices"><legend class="hide">Stats to show</legend></fieldset>
       <label class="every" for="refresh">Update every <input id="refresh" type="number" inputmode="numeric" step="1" required> seconds</label>
       <p class="small" id="refresh-note"></p>
+      <div class="color-row">
+        <div id="wheel" class="wheel" aria-label="Number color"></div>
+        <div>
+          <label class="every" for="color-for">Color of <select id="color-for"></select></label>
+          <p class="preview"><strong id="color-preview">1,234</strong> <span id="color-name"></span></p>
+          <button id="color-reset" type="button" class="plain">Back to white</button>
+        </div>
+      </div>
     </section>
 
     <section data-step="install" data-title="Install" hidden>
@@ -86,6 +94,7 @@
     <button id="back" type="button" class="plain" hidden>Back</button>
     <button id="next" type="button" disabled>Next</button>
   </footer>
+  <script src="/wheel.js"></script>
   <script src="/setup.js"></script>
 </body>
 </html>

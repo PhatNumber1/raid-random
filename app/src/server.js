@@ -4,13 +4,14 @@
 // must use our exact address, and every API call needs a key only our pages are given.
 const http = require('node:http');
 const crypto = require('node:crypto');
-const { STATS, REFRESH, isRefresh } = require('./stats');
+const { STATS, REFRESH, isRefresh, isColor, cleanColors } = require('./stats');
 const { readPublic } = require('./files');
 
 const PAGES = { '/': 'setup.html', '/dock': 'dock.html' };
 const ASSETS = {
   '/setup.js': ['setup.js', 'text/javascript'],
   '/dock.js': ['dock.js', 'text/javascript'],
+  '/wheel.js': ['wheel.js', 'text/javascript'],
   '/setup.css': ['setup.css', 'text/css'],
   '/dock.css': ['dock.css', 'text/css'],
   '/ping.svg': ['ping.svg', 'image/svg+xml'],
@@ -50,12 +51,25 @@ function checkRefresh(value) {
   return value;
 }
 
+function checkColors(input) {
+  if (!input || typeof input !== 'object' || Object.entries(input).some(([id, c]) => !STATS.some((s) => s.id === id) || !isColor(c))) throw new BadRequest('That is not a color.');
+  return cleanColors(input);
+}
+
+// The same color for several stats, white included.
+function checkAll(ids, color) {
+  const all = Object.fromEntries(ids.map((id) => [id, color]));
+  checkColors(all);
+  return all;
+}
+
 function checkSettings(input, now = {}) {
   return {
     stats: checkStats(input),
     dock: input.dock !== false,
     autostart: input.autostart !== false,
     refresh: input.refresh === undefined ? now.refresh ?? REFRESH.usual : checkRefresh(input.refresh),
+    colors: input.colors === undefined ? now.colors ?? {} : checkColors(input.colors),
     saved: true,
   };
 }
@@ -81,6 +95,7 @@ function createServer({ auth, stats, settings, installer = null, raid = null, ne
     'POST /api/raid/go': raidStep((body) => soon(raid.go(String(body.targetId)))),
     'POST /api/raid/cancel': raidStep(() => raid.cancel()),
     'POST /api/raid/stop': raidStep(() => soon(raid.stopNow())),
+    'POST /api/raid/end': raidStep(() => soon(raid.endAnyway())),
     'POST /api/raid/keep': raidStep(() => raid.keepStreaming()),
     'GET /api/state': () => ({
       demo,
@@ -101,6 +116,14 @@ function createServer({ auth, stats, settings, installer = null, raid = null, ne
       const next = { ...settings.get(), stats: checkStats(await readBody(req)) };
       settings.set(next);
       stats.refreshNow();
+      return { settings: next };
+    },
+    'POST /api/color': async (req) => {
+      const { stat, color } = await readBody(req);
+      const ids = stat === 'all' ? STATS.map((s) => s.id) : [stat];
+      const now = settings.get();
+      const next = { ...now, colors: cleanColors({ ...now.colors, ...checkAll(ids, color) }) };
+      settings.set(next);
       return { settings: next };
     },
     'POST /api/refresh': async (req) => {

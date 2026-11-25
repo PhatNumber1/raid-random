@@ -159,4 +159,12 @@ class Stats {
   }
 }
 
-module.exports = { Stats, STATS, DEFAULT_STATS, REFRESH, isRefresh };
+// The color of each number in the dock. Anything not listed is white.
+const isColor = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/.test(v);
+function cleanColors(input) {
+  const out = {};
+  for (const { id } of STATS) if (isColor(input?.[id]) && input[id] !== '#ffffff') out[id] = input[id];
+  return out;
+}
+
+module.exports = { Stats, STATS, DEFAULT_STATS, REFRESH, isRefresh, isColor, cleanColors };

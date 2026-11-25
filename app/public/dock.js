@@ -1,5 +1,6 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
+let last = null; // the latest answer from the app
 const key = document.querySelector('meta[name="raid-random-key"]').content;
 
 function since(iso) {
@@ -58,6 +59,7 @@ function row(item) {
   short.className = 'short';
   long.textContent = one(words[none ? 1 : 0]);
   short.textContent = one(words[none ? 3 : 2]);
+  if (!none) value.style.color = colorOf(item.id);
   text.append(value, ' ', long, short);
   li.title = `${words[1]}: ${none && item.hint ? item.hint : value.textContent}`;
   li.append(icon(item.id), text);
@@ -167,7 +169,7 @@ function drawRaid(raid) {
   box.replaceChildren();
   if (!raid) return;
   const { state, target, message, note } = raid;
-  if (note) add(box, 'p', note, 'dim');
+  if (note && state !== 'searching') add(box, 'p', note, 'dim');
   const name = () => add(box, 'p', target.name, 'name');
   const countdown = (before, after) => {
     const p = add(box, 'p', before);
@@ -177,7 +179,9 @@ function drawRaid(raid) {
   };
   if (state === 'idle') button(box, 'End Stream / Raid Random', '/api/raid/find');
   else if (state === 'searching') {
-    add(box, 'p', 'Looking for a channel...');
+    if (raid.parts > 1) add(box, 'p', `Step ${raid.part} of ${raid.parts}`, 'dim');
+    add(box, 'p', message || 'Looking for a channel...');
+    if (note) countdown(`${note} in `, ' s');
     button(box, 'Cancel', '/api/raid/cancel', { plain: true });
   } else if (state === 'confirm') {
     add(box, 'p', "You're about to raid");
@@ -197,19 +201,26 @@ function drawRaid(raid) {
     countdown('Goes through in about ', ' seconds, or when you press Raid Now on Twitch.');
     button(box, 'Cancel raid', '/api/raid/cancel', { plain: true });
   } else if (state === 'stopping') {
-    add(box, 'p', 'Raid complete!');
+    if (target) add(box, 'p', 'Raid complete!');
     if (raid.secondsLeft === undefined) add(box, 'p', 'Stopping your stream...');
     else {
       countdown('Your stream ends in ', ' seconds.');
       button(box, 'Keep streaming', '/api/raid/keep', { plain: true });
     }
   } else if (state === 'stopped') {
-    add(box, 'p', `You raided ${target.name}. Your stream has ended.`);
+    add(box, 'p', target ? `You raided ${target.name}. Your stream has ended.` : 'Your stream has ended. Nobody was raided.');
     button(box, 'OK', '/api/raid/cancel', { plain: true });
   } else if (state === 'ask') {
     add(box, 'p', message);
     button(box, 'End stream now', '/api/raid/stop');
     button(box, 'Keep streaming', '/api/raid/keep', { plain: true });
+  } else if (state === 'nobody') {
+    add(box, 'p', 'Could not find anybody. End stream?', 'name');
+    add(box, 'p', message, 'dim wrap');
+    button(box, 'End stream', '/api/raid/end');
+    const pair = add(box, 'div', '', 'pair');
+    button(pair, 'Try again', '/api/raid/find', { plain: true });
+    button(pair, 'Keep streaming', '/api/raid/cancel', { plain: true });
   } else if (state === 'error') {
     add(box, 'p', message);
     button(box, 'Try again', '/api/raid/find');
@@ -217,8 +228,62 @@ function drawRaid(raid) {
   }
 }
 
+// ---------- the color of each number ----------
+let colorFor = 'viewers'; // or 'all'
+const colorOf = (id) => last?.settings.colors[id] || '#ffffff';
+const wheel = makeWheel($('wheel'), { onMove: (hex) => previewColor(hex), onPick: (hex) => saveColor(hex) });
+
+function previewColor(hex) { $('color-preview').style.color = hex; }
+
+function saveColor(hex) {
+  previewColor(hex);
+  const stat = colorFor;
+  saving = saving.then(async () => {
+    try {
+      last.settings = (await post('/api/color', { stat, color: hex })).settings;
+      $('panel-note').textContent = 'Saved';
+    } catch (err) { $('panel-note').textContent = err.message || 'Could not save.'; }
+    drawColors();
+  });
+}
+
+function drawColors() {
+  const box = $('color-for');
+  if (!box.children.length) {
+    for (const stat of [{ id: 'all', label: 'All numbers' }, ...last.available]) {
+      const b = add(box, 'button', stat.id === 'all' ? 'All' : '');
+      b.type = 'button';
+      b.title = stat.label;
+      b.dataset.id = stat.id;
+      b.setAttribute('aria-label', stat.label);
+      if (stat.id !== 'all') b.append(icon(stat.id));
+      b.onclick = () => { colorFor = stat.id; $('panel-note').textContent = ''; drawColors(); };
+    }
+  }
+  for (const b of box.children) {
+    b.setAttribute('aria-pressed', String(b.dataset.id === colorFor));
+    const svg = b.querySelector('.icon');
+    if (svg) { svg.style.stroke = colorOf(b.dataset.id); svg.style.fill = svg.classList.contains('solid') ? colorOf(b.dataset.id) : 'none'; }
+  }
+  const all = last.available.map((s) => colorOf(s.id));
+  const hex = colorFor !== 'all' ? colorOf(colorFor) : all.every((c) => c === all[0]) ? all[0] : '#ffffff';
+  $('color-name').textContent = colorFor === 'all' ? 'all numbers' : (WORDS[colorFor] || ['', colorFor])[2] || colorFor;
+  previewColor(hex);
+  wheel.set(hex);
+}
+
+function colorBox(open) {
+  $('color-box').hidden = !open;
+  $('color-toggle').setAttribute('aria-expanded', String(open));
+  $('swatch-text').textContent = open ? 'Stats' : 'Colors';
+  document.body.classList.toggle('color-open', open);
+  $('panel-note').textContent = '';
+  if (open) drawColors();
+}
+$('color-toggle').onclick = () => colorBox($('color-box').hidden);
+$('color-reset').onclick = () => saveColor('#ffffff');
+
 // ---------- the gear ----------
-let last = null; // the latest answer from the app
 
 async function post(path, body) {
   const res = await fetch(path, {
@@ -238,7 +303,7 @@ function panel(open) {
   document.body.classList.toggle('panel-open', open);
   fit();
   $('gear').setAttribute('aria-expanded', String(open));
-  $('panel-note').textContent = '';
+  colorBox(false);
   if (!open) return;
   Object.assign($('refresh'), { min: last.refreshLimits.min, max: last.refreshLimits.max, value: last.settings.refresh });
   for (const old of $('choices').querySelectorAll('label')) old.remove();

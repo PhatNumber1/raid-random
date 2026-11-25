@@ -9,6 +9,7 @@ const { EventSub } = require('../src/eventsub');
 const { Stats } = require('../src/stats');
 const { createServer } = require('../src/server');
 const { openWindow, findEngine } = require('../src/window');
+const { wheelHex, wheelPlace } = require('../public/wheel');
 
 const json = (status, body) => new Response(JSON.stringify(body), { status });
 const tick = () => new Promise((r) => setTimeout(r, 5));
@@ -270,6 +271,24 @@ test('live line: a refusal is marked, not hammered', async () => {
   es.stop();
 });
 
+// ---------- the color wheel ----------
+test('color wheel: every color on it stays readable on the dark boxes, and finds its own place', () => {
+  const light = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  let worst = 99;
+  for (let hue = 0; hue < 360; hue += 5) {
+    for (let s = 0; s <= 1.001; s += 0.1) {
+      const hex = wheelHex(hue, Math.min(1, s));
+      assert.match(hex, /^#[0-9a-f]{6}$/);
+      worst = Math.min(worst, (light(hex) + 0.05) / (light('#2b2d35') + 0.05));
+      if (s > 0.3) { const p = wheelPlace(hex); assert.ok(Math.min(Math.abs(p.hue - hue), 360 - Math.abs(p.hue - hue)) < 4 && Math.abs(p.strength - s) < 0.03, hex); }
+    }
+  }
+  assert.ok(worst >= 3, `worst contrast ${worst}`); // the standard for large bold text
+  assert.equal(wheelHex(200, 0), '#ffffff');
+  const red = wheelHex(0, 1);
+  assert.ok(parseInt(red.slice(1, 3), 16) === 255 && parseInt(red.slice(3, 5), 16) < 40, `a real red: ${red}`);
+});
+
 // ---------- the window ----------
 test('window: Edge first, then Chrome, then the normal browser', () => {
   const env = { 'ProgramFiles(x86)': 'X86', ProgramFiles: 'PF', LOCALAPPDATA: 'LA' };
@@ -335,8 +354,19 @@ test('server: our pages work, other websites are refused', async () => {
     assert.equal((await save('{"stats":["nope"]}')).status, 400);
     assert.equal((await save('not json')).status, 400);
     assert.equal((await save('{"stats":["peak","viewers"]}')).status, 200);
-    assert.deepEqual(settings, { stats: ['viewers', 'peak'], dock: true, autostart: true, refresh: 5, saved: true });
+    assert.deepEqual(settings, { stats: ['viewers', 'peak'], dock: true, autostart: true, refresh: 5, colors: {}, saved: true });
+    const paint = (b) => ask('POST', '/api/color', { 'X-Raid-Random-Key': key }, b);
+    assert.equal((await paint('{"stat":"viewers","color":"#ff0000"}')).status, 200);
+    for (const bad of ['{"stat":"viewers","color":"red"}', '{"stat":"nope","color":"#ff0000"}', '{"stat":"__proto__","color":"#ff0000"}', '{"stat":"viewers","color":"#ffffff;}body{"}', '{}']) assert.equal((await paint(bad)).status, 400);
+    assert.deepEqual(settings.colors, { viewers: '#ff0000' }); // only that one
+    assert.equal((await paint('{"stat":"all","color":"#00ff00"}')).status, 200);
+    assert.equal(Object.keys(settings.colors).length, 7);
+    assert.equal((await paint('{"stat":"all","color":"#ffffff"}')).status, 200);
+    assert.deepEqual(settings.colors, {});
+    assert.equal((await save('{"stats":["peak"],"colors":{"nope":"#ff0000"}}')).status, 400);
+    assert.equal((await paint('{"stat":"viewers","color":"#ff0000"}')).status, 200);
     assert.equal((await save('{"stats":["peak"],"refresh":30}')).status, 200);
+    assert.deepEqual(settings.colors, { viewers: '#ff0000' }); // left out means unchanged
     assert.equal(settings.refresh, 30);
     assert.equal((await save('{"stats":["peak"]}')).status, 200);
     assert.equal(settings.refresh, 30); // left out means unchanged
@@ -348,7 +378,7 @@ test('server: our pages work, other websites are refused', async () => {
     assert.equal((await post('/api/finish')).status, 200);
     const gear = (b) => ask('POST', '/api/stats', { 'X-Raid-Random-Key': key }, b);
     assert.equal((await gear('{"stats":["uptime"],"dock":true,"autostart":true}')).status, 200);
-    assert.deepEqual(settings, { stats: ['uptime'], dock: false, autostart: false, refresh: 3600, saved: true }); // only the stats
+    assert.deepEqual(settings, { stats: ['uptime'], dock: false, autostart: false, refresh: 3600, colors: { viewers: '#ff0000' }, saved: true }); // only the stats
     for (const bad of ['{"stats":[]}', '{"stats":["nope"]}', '{}']) assert.equal((await gear(bad)).status, 400);
   } finally { server.close(); }
 });

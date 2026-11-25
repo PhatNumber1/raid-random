@@ -22,6 +22,12 @@
   </header>
   <p id="message" role="status" hidden></p>
   <div id="panel" hidden>
+    <button id="color-toggle" type="button" class="swatch" aria-expanded="false" aria-controls="color-box"><span id="swatch-text">Colors</span> <span id="swatch-dot"></span></button>
+    <div id="color-box" hidden>
+      <div id="color-for" class="chips" role="group" aria-label="Which number"></div>
+      <div class="preview-row"><p class="preview"><strong id="color-preview">1,234</strong> <span id="color-name"></span></p><button id="color-reset" type="button" class="plain small-button" title="Back to white">White</button></div>
+      <div id="wheel" class="wheel" aria-label="Color"></div>
+    </div>
     <fieldset id="choices"><legend>Show in the dock</legend></fieldset>
     <label class="every">Update every <input id="refresh" type="number" inputmode="numeric" step="1"> sec</label>
     <p id="panel-note" class="small" role="status"></p>
@@ -35,6 +41,7 @@
     <div id="raid" aria-live="polite"></div>
     <p id="raid-error" class="problem" role="alert" hidden></p>
   </footer>
+  <script src="/wheel.js"></script>
   <script src="/dock.js"></script>
 </body>
 </html>

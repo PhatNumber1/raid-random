@@ -23,9 +23,11 @@ class DemoApi {
   async subscriberTotal() { return 46; }
   async liveStreams() {
     await pause(600);
+    if (process.env.RAID_RANDOM_DEMO_NOBODY) return { data: [], cursor: null };
     const names = Array.from({ length: 30 }, (_, i) => `Pretend_Streamer_${i + 1}`);
     return { data: names.map((n, i) => ({ user_id: `10${i}`, user_name: n, user_login: n.toLowerCase(), type: 'live', viewer_count: 14 + i, game_name: 'Demo Game' })), cursor: null };
   }
+  async topGames() { return { data: [], cursor: null }; }
   async startRaid(from, to) {
     this.timer = setTimeout(() => this.onEvent('channel.raid', { from_broadcaster_user_id: from, to_broadcaster_user_id: to, to_broadcaster_user_name: 'x' }), 8000);
   }

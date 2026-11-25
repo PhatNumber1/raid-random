@@ -9,6 +9,25 @@ let wizard = null; // true on the first run, false once it is set up
 let step = 0;
 let offline = false;
 let busy = false;
+let colors = {};
+const wheel = makeWheel($('wheel'), { onMove: (hex) => setColor(hex) });
+
+function setColor(hex) {
+  const id = $('color-for').value;
+  for (const s of id === 'all' ? state.available : [{ id }]) colors[s.id] = hex;
+  $('color-preview').style.color = hex;
+  $('saved').textContent = '';
+}
+
+function showColor() {
+  const id = $('color-for').value;
+  const all = state.available.map((s) => colors[s.id] || '#ffffff');
+  const hex = id !== 'all' ? colors[id] || '#ffffff' : all.every((c) => c === all[0]) ? all[0] : '#ffffff';
+  $('color-preview').style.color = hex;
+  $('color-name').textContent = $('color-for').selectedOptions[0].textContent.toLowerCase();
+  wheel.set(hex);
+}
+$('color-for').onchange = showColor;
 
 async function call(method, path, body) {
   const res = await fetch(path, {
@@ -106,6 +125,9 @@ async function refresh() {
       drawChoices(state.available, state.settings.stats);
       Object.assign($('refresh'), { min: state.refreshLimits.min, max: state.refreshLimits.max, value: state.settings.refresh });
       $('refresh-note').textContent = `From ${state.refreshLimits.min} to ${state.refreshLimits.max} seconds. New subs always show right away.`;
+      colors = { ...state.settings.colors };
+      for (const s of [...state.available, { id: 'all', label: 'All numbers' }]) $('color-for').append(new Option(s.label, s.id));
+      showColor();
       $('dock').checked = state.settings.dock;
       $('autostart').checked = state.settings.autostart;
     }
@@ -129,7 +151,7 @@ async function act(button, work) {
   if (failed) problem(failed.message);
 }
 
-const save = () => call('POST', '/api/settings', { stats: chosen(), refresh: $('refresh').valueAsNumber, dock: $('dock').checked, autostart: $('autostart').checked });
+const save = () => call('POST', '/api/settings', { stats: chosen(), refresh: $('refresh').valueAsNumber, colors, dock: $('dock').checked, autostart: $('autostart').checked });
 
 $('next').onclick = () => {
   if (!wizard) { act($('next'), async () => { await save(); $('saved').textContent = 'Saved'; }); return; }
@@ -139,6 +161,7 @@ $('next').onclick = () => {
 };
 $('back').onclick = () => go(step - 1);
 for (const b of document.querySelectorAll('[data-open]')) b.onclick = () => act(b, () => call('POST', `/api/open-${b.dataset.open}`, {}));
+$('color-reset').onclick = () => { setColor('#ffffff'); showColor(); };
 $('again').onclick = () => { wizard = true; go(0); };
 $('login').onclick = () => act($('login'), () => call('POST', '/api/login'));
 $('activate').onclick = () => act($('activate'), () => call('POST', '/api/open-twitch', {}));

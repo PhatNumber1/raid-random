@@ -75,6 +75,12 @@ class TwitchApi {
     return { data: r.data || [], cursor: r.pagination?.cursor || null };
   }
 
+  // Categories, most watched first.
+  async topGames({ after }) {
+    const r = await this.request('GET', 'games/top', { query: { first: 100, ...(after ? { after } : {}) } });
+    return { data: r.data || [], cursor: r.pagination?.cursor || null };
+  }
+
   // Which of these channels are live right now, with their viewers.
   async streamsOf(ids) {
     const found = [];
