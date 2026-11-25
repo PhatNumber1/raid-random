@@ -117,7 +117,7 @@ if (process.env.RAID_RANDOM_TEST_PORT && process.env.RAID_RANDOM_TEST_CRASH) set
 
 const quit = () => { log('Stopping.'); setTimeout(() => process.exit(0), 100); };
 const finish = () => handOff(['--no-open']);
-const server = createServer({ finish, auth, stats, settings, installer, raid, network, subsState: () => events?.subsState, port, demo, quit, log, showWindow, openTwitch: (url) => openLink(url, { log }) });
+const server = createServer({ finish, auth, stats, settings, installer, raid, network, subsState: () => events?.subsState, port, demo, quit, log, showWindow, openTwitch: (url) => openLink(url, { log }), openInfo: (url) => openLink(url, { log }) });
 
 function fetchPage(method, url, headers = {}) {
   return new Promise((resolve, reject) => {

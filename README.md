@@ -59,4 +59,6 @@ and `%APPDATA%\RaidRandom`.
 
 You may download and use the app for free. No other license is given at the moment.
 
+The .exe contains Node.js. Its license text is in `app/public/licenses.txt` and in the app under Licenses.
+
 Raid Random is not affiliated with Twitch or OBS.

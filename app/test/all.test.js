@@ -296,6 +296,7 @@ test('server: our pages work, other websites are refused', async () => {
     auth: { user: null, status: () => (pending ? { state: 'pending', url: 'https://www.twitch.tv/activate?x=1' } : { state: 'signed-out' }) },
     openTwitch: (url) => opened.push(url),
     showWindow: () => opened.push('window'),
+    openInfo: (url) => opened.push(url),
     stats: { refreshNow() {}, snapshot: () => ({}) },
     settings: { get: () => settings, set: (s) => { settings = s; } },
   });
@@ -322,7 +323,12 @@ test('server: our pages work, other websites are refused', async () => {
     pending = true;
     assert.equal((await post('/api/open-twitch')).status, 200);
     assert.equal((await post('/api/show-window')).status, 200);
-    assert.deepEqual(opened, ['https://www.twitch.tv/activate?x=1', 'window']);
+    assert.equal((await post('/api/open-privacy')).status, 200);
+    assert.equal((await post('/api/open-licenses')).status, 200);
+    assert.deepEqual(opened, ['https://www.twitch.tv/activate?x=1', 'window', 'https://github.com/PhatNumber1/raid-random#privacy', `http://127.0.0.1:${port}/licenses.txt`]);
+    const text = await ask('GET', '/licenses.txt');
+    assert.match(text.headers['content-type'], /^text\/plain/);
+    assert.match(text.text, /Node\.js contributors/);
     assert.equal((await ask('POST', '/api/show-window')).status, 403);
     assert.equal((await ask('GET', '/api/state', { 'X-Raid-Random-Key': key })).status, 200);
     const save = (b) => ask('POST', '/api/settings', { 'X-Raid-Random-Key': key }, b);

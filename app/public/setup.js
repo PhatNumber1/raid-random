@@ -138,6 +138,7 @@ $('next').onclick = () => {
   go(step + 1);
 };
 $('back').onclick = () => go(step - 1);
+for (const b of document.querySelectorAll('[data-open]')) b.onclick = () => act(b, () => call('POST', `/api/open-${b.dataset.open}`, {}));
 $('again').onclick = () => { wizard = true; go(0); };
 $('login').onclick = () => act($('login'), () => call('POST', '/api/login'));
 $('activate').onclick = () => act($('activate'), () => call('POST', '/api/open-twitch', {}));

@@ -24,6 +24,10 @@ button:hover:not(:disabled) { background: #4a24a5; }
 button:disabled { opacity: .5; cursor: default; }
 button.plain { border-color: #c8c8d0; background: #fff; color: #1c1c1f; font-weight: 400; padding: .3rem .7rem; }
 button.plain:hover:not(:disabled) { background: #f3f3f6; }
+button.link { padding: 0; border: 0; background: none; color: #5b2fc4; font: inherit; font-weight: 400; text-decoration: underline; }
+button.link:hover:not(:disabled) { background: none; color: #3f1f91; }
+.about { padding-top: .4rem; }
+.about .link { margin-right: .9rem; }
 :focus-visible { outline: 3px solid #a98bf0; outline-offset: 2px; }
 .code { font: 600 2rem/1.2 Consolas, monospace; letter-spacing: .15em; }
 code { padding: .1rem .35rem; border-radius: 4px; background: #f3f3f6; font-family: Consolas, monospace; overflow-wrap: anywhere; }

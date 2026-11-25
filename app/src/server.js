@@ -15,9 +15,11 @@ const ASSETS = {
   '/dock.css': ['dock.css', 'text/css'],
   '/ping.svg': ['ping.svg', 'image/svg+xml'],
   '/icon.svg': ['icon.svg', 'image/svg+xml'],
+  '/licenses.txt': ['licenses.txt', 'text/plain'],
 };
 const MAX_BODY = 10 * 1024;
 const APP_HEADER = 'raid-random';
+const PRIVACY_URL = 'https://github.com/PhatNumber1/raid-random#privacy';
 
 class BadRequest extends Error {}
 
@@ -58,7 +60,7 @@ function checkSettings(input, now = {}) {
   };
 }
 
-function createServer({ auth, stats, settings, installer = null, raid = null, network = null, subsState = () => 'off', port, demo = false, quit = () => {}, log = () => {}, showWindow = () => {}, openTwitch = () => {}, finish = () => {} }) {
+function createServer({ auth, stats, settings, installer = null, raid = null, network = null, subsState = () => 'off', port, demo = false, quit = () => {}, log = () => {}, showWindow = () => {}, openTwitch = () => {}, openInfo = () => {}, finish = () => {} }) {
   const key = crypto.randomBytes(24).toString('hex');
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
 
@@ -121,6 +123,9 @@ function createServer({ auth, stats, settings, installer = null, raid = null, ne
       openTwitch(s.url);
       return { ok: true };
     },
+    // Opens one of two fixed addresses in the normal browser.
+    'POST /api/open-privacy': () => { openInfo(PRIVACY_URL); return { ok: true }; },
+    'POST /api/open-licenses': () => { openInfo(`http://127.0.0.1:${port}/licenses.txt`); return { ok: true }; },
     'POST /api/finish': () => { notDuringRaid(); finish(); return { ok: true }; },
     'POST /api/show-window': () => { showWindow(); return { ok: true }; },
     'POST /api/quit': async (req) => {

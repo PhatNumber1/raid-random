@@ -75,7 +75,8 @@ for (let i = 1; ; i++) {
 // 5. A fingerprint, so people can check their download, and Node's license.
 const sum = crypto.createHash('sha256').update(fs.readFileSync(exe)).digest('hex');
 fs.writeFileSync(path.join(dist, 'SHA256.txt'), `${sum}  RaidRandom.exe\n`);
-const license = path.join(path.dirname(process.execPath), 'LICENSE');
-if (fs.existsSync(license)) fs.copyFileSync(license, path.join(dist, 'NODE-LICENSE.txt'));
+const license = path.join(app, 'public', 'licenses.txt');
+if (!fs.readFileSync(license, 'utf8').startsWith(`Raid Random contains Node.js (${process.version})`)) throw new Error('app/public/licenses.txt is for another Node.js version.');
+fs.copyFileSync(license, path.join(dist, 'LICENSES.txt'));
 fs.rmSync(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
-console.log(`Built ${exe}\n${(fs.statSync(exe).size / 1e6).toFixed(1)} MB, Node ${process.version}, license file: ${fs.existsSync(license)}\nSHA-256 ${sum}`);
+console.log(`Built ${exe}\n${(fs.statSync(exe).size / 1e6).toFixed(1)} MB, Node ${process.version}, license text included\nSHA-256 ${sum}`);
